@@ -1,60 +1,60 @@
-# ConsumerSim MCP Proxy
+# ConsumerSim Forecast Interface
 
-This repository is the public ConsumerSim interface package. It does not contain
-the ConsumerSim forecasting pipeline, model code, training logic, data refresh
-scripts, or private datasets.
+ConsumerSim provides consumer confidence forecasts for three markets:
 
-It contains:
+- `US`
+- `EU27`
+- `JP`
 
-- A thin MCP server that exposes forecast tools.
-- A GitHub Actions refresh job that writes static forecast data for GitHub Pages.
-- An optional local web bridge for previewing the website against a private backend.
-- Static website assets copied from the public forecast site.
+Users can access the forecasts in two ways:
 
-All forecast refreshes are pulled from a private HTTPS backend configured through
-environment variables. GitHub Pages serves only static files.
+- View the public forecast website hosted from this repository.
+- Connect to the MCP server and ask for forecasts by region, month, and optional week.
 
-## Tools
+This repository is an interface package only. It does not publish the private
+forecasting pipeline, model prompts, data refresh logic, source API keys, or
+private datasets.
 
-`forecast_lookup`
+## What You Can Ask For
+
+Use `forecast_lookup` when you need a forecast value.
+
+Monthly forecast:
 
 ```json
 {
   "region": "US",
+  "month": "2026-07"
+}
+```
+
+Weekly forecast:
+
+```json
+{
+  "region": "EU27",
   "month": "2026-07",
   "week": 1
 }
 ```
 
-If `week` is omitted, the backend should return the monthly forecast.
+Supported inputs:
 
-`forecast_times`
+- `region`: `US`, `EU27`, or `JP`
+- `month`: target month in `YYYY-MM` format
+- `week`: optional week number within that month, such as `1`, `2`, `3`, or `4`
 
-```json
-{
-  "region": "EU27"
-}
-```
-
-## Backend Contract
-
-By default the proxy calls:
-
-- `POST {CONSUMERSIM_API_BASE_URL}/forecast`
-- `GET {CONSUMERSIM_API_BASE_URL}/forecast/times`
-- `GET {CONSUMERSIM_API_BASE_URL}/site-data`
-
-Expected `POST /forecast` request:
+Use `forecast_times` to see which forecast periods are available.
 
 ```json
 {
-  "region": "EU27",
-  "month": "2026-06",
-  "week": 4
+  "region": "JP"
 }
 ```
 
-Expected response:
+## Typical Response
+
+`forecast_lookup` returns a forecast snapshot like this:
 
 ```json
 {
@@ -74,110 +74,157 @@ Expected response:
 }
 ```
 
-Expected `GET /site-data` response, used by GitHub Actions:
+The exact fields may vary by backend version, but the response is designed to
+include the requested region and time, the forecast value, a confidence band,
+and a short interpretation.
+
+## Run As An MCP Server
+
+Install the package:
+
+```powershell
+python -m pip install -e .
+```
+
+Configure the private backend endpoint:
+
+```powershell
+$env:CONSUMERSIM_API_BASE_URL = "https://your-consumersim-backend.example.com"
+$env:CONSUMERSIM_API_KEY = "<your access token>"
+```
+
+Start the MCP server:
+
+```powershell
+consumersim-mcp
+```
+
+The MCP server exposes:
+
+- `forecast_lookup`
+- `forecast_times`
+
+It forwards requests to the configured ConsumerSim backend and returns the
+backend result to the MCP client.
+
+## Run The Website Locally
+
+The website is a static forecast dashboard under `site/`.
+
+For a local preview backed by the private API:
+
+```powershell
+python -m pip install -e .
+$env:CONSUMERSIM_API_BASE_URL = "https://your-consumersim-backend.example.com"
+$env:CONSUMERSIM_API_KEY = "<your access token>"
+consumersim-web
+```
+
+Open:
+
+```text
+http://127.0.0.1:4173
+```
+
+The local web bridge serves the static site and proxies `/api/site-data` to the
+private backend. This keeps backend credentials out of browser JavaScript.
+
+## Public Website Deployment
+
+The recommended public deployment is GitHub Pages.
+
+The included workflow:
+
+```text
+.github/workflows/refresh-site.yml
+```
+
+does the following:
+
+1. Calls the private backend for the latest forecast CSV.
+2. Validates the CSV structure.
+3. Writes the result to `site/data/consumersim_site_data.csv`.
+4. Commits the updated CSV when it changes.
+5. Deploys the `site/` directory to GitHub Pages.
+
+Repository setup:
+
+- Set Pages source to `GitHub Actions`.
+- Allow GitHub Actions `Read and write permissions`.
+- Add `CONSUMERSIM_API_BASE_URL` as a repository variable.
+- Add `CONSUMERSIM_API_KEY` as a repository secret if the backend requires a token.
+
+Do not put source data API keys or model API keys in GitHub. Those belong only
+on the private backend server.
+
+## Backend Settings
+
+Required:
+
+- `CONSUMERSIM_API_BASE_URL`
+
+Usually required:
+
+- `CONSUMERSIM_API_KEY`
+
+Optional:
+
+- `CONSUMERSIM_FORECAST_PATH`, default `/forecast`
+- `CONSUMERSIM_TIMES_PATH`, default `/forecast/times`
+- `CONSUMERSIM_SITE_DATA_PATH`, default `/site-data`
+- `CONSUMERSIM_API_KEY_HEADER`, default `Authorization`
+- `CONSUMERSIM_API_KEY_SCHEME`, default `Bearer`
+- `CONSUMERSIM_TIMEOUT_SECONDS`, default `30`
+
+## Backend Contract
+
+The proxy calls these backend routes:
+
+- `POST {CONSUMERSIM_API_BASE_URL}/forecast`
+- `GET {CONSUMERSIM_API_BASE_URL}/forecast/times`
+- `GET {CONSUMERSIM_API_BASE_URL}/site-data`
+
+Expected `POST /forecast` request:
+
+```json
+{
+  "region": "EU27",
+  "month": "2026-06",
+  "week": 4
+}
+```
+
+Expected `GET /site-data` response:
 
 ```text
 as_of,record_type,region,...
 2026-07-04,monthly_prediction,us,...
 ```
 
-GitHub Actions writes this CSV to:
+The website reads the static CSV from:
 
 ```text
 site/data/consumersim_site_data.csv
 ```
 
-The website reads that static file from GitHub Pages. The private backend can
-refresh forecasts without publishing internal logic.
+## Repository Boundary
 
-## Configuration
+This public repository should contain only:
 
-Copy `.env.example` into your deployment environment and set:
+- MCP proxy code
+- public website assets
+- GitHub Pages refresh workflow
+- tests for the public interface
+- examples and documentation for users
 
-```powershell
-$env:CONSUMERSIM_API_BASE_URL = "https://your-private-consumersim.example.com"
-$env:CONSUMERSIM_API_KEY = "<optional token>"
-```
+Do not commit:
 
-Optional overrides:
+- private forecasting pipeline code
+- model prompts or internal simulation logic
+- private data refresh scripts
+- source API keys
+- LLM API keys
+- private datasets
 
-- `CONSUMERSIM_FORECAST_PATH`
-- `CONSUMERSIM_TIMES_PATH`
-- `CONSUMERSIM_SITE_DATA_PATH`
-- `CONSUMERSIM_API_KEY_HEADER`
-- `CONSUMERSIM_API_KEY_SCHEME`
-- `CONSUMERSIM_TIMEOUT_SECONDS`
-
-## Run The MCP Server
-
-```powershell
-python -m pip install -e .
-consumersim-mcp
-```
-
-## Run The Website Bridge
-
-```powershell
-python -m pip install -e .
-consumersim-web
-```
-
-Then open:
-
-```text
-http://127.0.0.1:4173
-```
-
-The web bridge serves `site/` and proxies website data requests to the private
-backend. A browser cannot call a stdio MCP server directly, so the website uses
-the HTTP bridge, which calls the same backend proxy implementation as the MCP
-tools.
-
-## GitHub Pages Deployment
-
-The recommended public website deployment is GitHub Pages with the included
-workflow:
-
-```text
-.github/workflows/refresh-site.yml
-```
-
-The workflow:
-
-1. installs this package,
-2. downloads the latest CSV from the private backend,
-3. validates and writes `site/data/consumersim_site_data.csv`,
-4. commits that data file back to the repo when it changed,
-5. deploys `site/` to GitHub Pages.
-
-Configure repository settings:
-
-```text
-Secret or variable: CONSUMERSIM_API_BASE_URL
-Optional secret:    CONSUMERSIM_API_KEY
-Optional variable:  CONSUMERSIM_SITE_DATA_PATH
-```
-
-In GitHub, set Pages source to "GitHub Actions".
-
-For pure static hosting, the browser cannot hide API keys and cannot call stdio
-MCP directly. This is why the workflow refreshes a static CSV ahead of time.
-If you ever need a browser to call a public read-only endpoint directly, configure:
-
-```javascript
-window.CONSUMERSIM_SITE_DATA_URL = "https://your-private-consumersim.example.com/site-data";
-```
-
-Use `site/site-config.example.js` as the template for that direct-browser mode.
-
-## What Not To Commit Here
-
-Do not add:
-
-- `consumer_pipeline/`
-- model or prompt logic
-- private forecast-generation scripts
-- private configs, examples, or outputs
-- generated CSV data that should remain server-side
-
-Keep this repo as an interface shell only.
+The private backend can update forecasts without exposing the internal
+ConsumerSim implementation.
