@@ -354,7 +354,10 @@ function renderHeroForecasts() {
     const noteNode = document.querySelector(`[data-hero-note="${region.id}"]`);
     if (valueNode) valueNode.textContent = fmt(weekly?.forecast ?? region.latest.forecast, 2);
     if (periodNode) periodNode.textContent = weekly ? `${weekly.label} / ${weekly.period}` : monthly?.period || "--";
-    if (noteNode) noteNode.textContent = heroForecastNote(region);
+    if (noteNode) {
+      noteNode.textContent = "";
+      noteNode.hidden = true;
+    }
     drawHeroForecastChart(region);
   });
 }
@@ -407,18 +410,6 @@ function weeklyDate(point) {
   let year = 2000 + Number(targetMatch[2]);
   if (targetMonth === 0 && weekMonth === 11) year -= 1;
   return new Date(year, weekMonth, point.cutoffDay);
-}
-
-function heroForecastNote(region) {
-  const points = heroForecastPoints(region);
-  const latestForecast = [...points].reverse().find((point) => Number.isFinite(point.forecast))?.forecast;
-  const latestActual = [...points].reverse().find((point) => Number.isFinite(point.actual))?.actual;
-  if (!Number.isFinite(latestForecast) || !Number.isFinite(latestActual)) {
-    return "Weekly forecast updates are shown against monthly ground truth.";
-  }
-  const gap = latestForecast - latestActual;
-  const direction = gap >= 0 ? "above" : "below";
-  return `Latest weekly forecast is ${Math.abs(gap).toFixed(2)} ${direction} the latest monthly ground truth.`;
 }
 
 function drawHeroForecastChart(region) {
