@@ -367,7 +367,17 @@ function renderHeroForecasts() {
 }
 
 function latestWeeklyForecast(regionId) {
-  return data.weeklyPredictions.filter((point) => point.id === regionId).at(-1);
+  return latestWeeklyRows(regionId).at(-1);
+}
+
+function latestWeeklyRows(regionId) {
+  const rows = data.weeklyPredictions.filter((point) => point.id === regionId);
+  const latestPeriod = rows
+    .map((point) => point.period)
+    .filter(Boolean)
+    .sort((a, b) => (monthDate(a)?.valueOf() || 0) - (monthDate(b)?.valueOf() || 0))
+    .at(-1);
+  return latestPeriod ? rows.filter((point) => point.period === latestPeriod) : rows;
 }
 
 function heroForecastPoints(region) {
@@ -381,8 +391,7 @@ function heroForecastPoints(region) {
       actual: point.actual,
       forecastOnly: false
     }));
-  const weeklyForecast = data.weeklyPredictions
-    .filter((point) => point.id === region.id)
+  const weeklyForecast = latestWeeklyRows(region.id)
     .map((point) => ({
       label: point.label,
       date: weeklyDate(point),
@@ -757,7 +766,7 @@ function renderUnavailableExplorer(region) {
 }
 
 function renderWeeklyExplorer(region) {
-  const rows = data.weeklyPredictions.filter((row) => row.id === activeForecastRegion);
+  const rows = latestWeeklyRows(activeForecastRegion);
   if (!rows.length) {
     renderUnavailableExplorer(region);
     return;
