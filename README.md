@@ -149,6 +149,11 @@ The repository does not commit `site/data/consumersim_site_data.csv`. The
 website reads site data at runtime from `window.CONSUMERSIM_SITE_DATA_URL` or
 from `/api/site-data` when served by the local web bridge.
 
+The browser checks the runtime site-data endpoint every 60 seconds and refreshes
+the rendered values when the CSV response changes. Set
+`window.CONSUMERSIM_SITE_DATA_REFRESH_MS` in `site/site-config.js` to override
+that interval, or set it to `0` to disable polling.
+
 Repository setup:
 
 - Set Pages source to `GitHub Actions`.

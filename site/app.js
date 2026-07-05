@@ -7,6 +7,10 @@ let explorerHitTargets = [];
 let explorerHover = null;
 let chartHitTargets = [];
 let chartHover = null;
+let latestSiteDataCsv = "";
+
+const configuredSiteDataRefreshMs = Number(window.CONSUMERSIM_SITE_DATA_REFRESH_MS);
+const SITE_DATA_REFRESH_MS = Number.isFinite(configuredSiteDataRefreshMs) ? configuredSiteDataRefreshMs : 60_000;
 
 const els = {
   generatedAt: document.querySelector("#generated-at"),
@@ -1236,10 +1240,41 @@ function render() {
   drawChart();
 }
 
-async function init() {
-  const csv = await loadSiteDataCsv();
+function applySiteDataCsv(csv, initial = false) {
+  if (!initial && csv === latestSiteDataCsv) return false;
+  latestSiteDataCsv = csv;
+  const previousRegionId = activeRegion?.id;
   data = buildData(parseCsv(csv));
-  activeRegion = data.regions[0];
+  activeRegion = data.regions.find((region) => region.id === previousRegionId) || data.regions[0];
+  if (!data.regions.some((region) => region.id === activeForecastRegion)) {
+    activeForecastRegion = data.regions[0]?.id || activeForecastRegion;
+  }
+
+  if (!initial) {
+    createTabs();
+    setMeta();
+    renderMapValues();
+    renderHeroForecasts();
+    renderAgentDemo();
+    renderForecastExplorer();
+    render();
+  }
+  return true;
+}
+
+function startSiteDataRefresh() {
+  if (!Number.isFinite(SITE_DATA_REFRESH_MS) || SITE_DATA_REFRESH_MS <= 0) return;
+  window.setInterval(async () => {
+    try {
+      applySiteDataCsv(await loadSiteDataCsv());
+    } catch (error) {
+      console.warn("Unable to refresh ConsumerSim site data.", error);
+    }
+  }, SITE_DATA_REFRESH_MS);
+}
+
+async function init() {
+  applySiteDataCsv(await loadSiteDataCsv(), true);
   typeHeroTitle();
   startTypingStatus();
   setupReveal();
@@ -1253,6 +1288,7 @@ async function init() {
   renderAgentDemo();
   renderForecastExplorer();
   render();
+  startSiteDataRefresh();
 }
 
 async function loadSiteDataCsv() {
