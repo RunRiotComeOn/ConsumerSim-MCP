@@ -57,13 +57,34 @@ jobs:
 
       - name: Refresh Pages artifact site data
         env:
+          CONSUMERSIM_SSH_PRIVATE_KEY: ${{ secrets.CONSUMERSIM_SSH_PRIVATE_KEY }}
+          CONSUMERSIM_SSH_HOST: ${{ vars.CONSUMERSIM_SSH_HOST || '8.216.41.50' }}
+          CONSUMERSIM_SSH_PORT: ${{ vars.CONSUMERSIM_SSH_PORT || '22' }}
+          CONSUMERSIM_SSH_USER: ${{ vars.CONSUMERSIM_SSH_USER || 'yixu' }}
+          CONSUMERSIM_SSH_SITE_DATA_PATH: ${{ vars.CONSUMERSIM_SSH_SITE_DATA_PATH || '/home/yixu/consumersim-api/data/consumersim_site_data.csv' }}
           CONSUMERSIM_API_BASE_URL: ${{ secrets.CONSUMERSIM_API_BASE_URL || vars.CONSUMERSIM_API_BASE_URL }}
           CONSUMERSIM_API_KEY: ${{ secrets.CONSUMERSIM_API_KEY }}
           CONSUMERSIM_API_KEY_HEADER: ${{ vars.CONSUMERSIM_API_KEY_HEADER }}
           CONSUMERSIM_API_KEY_SCHEME: ${{ vars.CONSUMERSIM_API_KEY_SCHEME }}
           CONSUMERSIM_SITE_DATA_PATH: ${{ vars.CONSUMERSIM_SITE_DATA_PATH }}
           CONSUMERSIM_TIMEOUT_SECONDS: ${{ vars.CONSUMERSIM_TIMEOUT_SECONDS }}
-        run: python scripts/refresh_site_data.py --output site/data/consumersim_site_data.csv
+        run: |
+          if [ -n "$CONSUMERSIM_SSH_PRIVATE_KEY" ]; then
+            mkdir -p ~/.ssh
+            chmod 700 ~/.ssh
+            printf '%s\n' "$CONSUMERSIM_SSH_PRIVATE_KEY" > ~/.ssh/consumersim_site_data_key
+            chmod 600 ~/.ssh/consumersim_site_data_key
+            ssh-keyscan -p "$CONSUMERSIM_SSH_PORT" "$CONSUMERSIM_SSH_HOST" >> ~/.ssh/known_hosts
+            scp -i ~/.ssh/consumersim_site_data_key \
+              -P "$CONSUMERSIM_SSH_PORT" \
+              "$CONSUMERSIM_SSH_USER@$CONSUMERSIM_SSH_HOST:$CONSUMERSIM_SSH_SITE_DATA_PATH" \
+              /tmp/consumersim_site_data.csv
+            python scripts/refresh_site_data.py \
+              --input /tmp/consumersim_site_data.csv \
+              --output site/data/consumersim_site_data.csv
+          else
+            python scripts/refresh_site_data.py --output site/data/consumersim_site_data.csv
+          fi
 
       - name: Run tests
         run: python -m pytest -q
