@@ -21,12 +21,20 @@ REQUIRED_RECORD_TYPES = {"monthly_prediction", "weekly_prediction"}
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Refresh the static ConsumerSim site data CSV.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--input",
+        type=Path,
+        help="Read site data from a local CSV file instead of the configured backend.",
+    )
     return parser.parse_args()
 
 
 async def main() -> None:
     args = parse_args()
-    csv_text = await ConsumerSimBackend().site_data_csv()
+    if args.input:
+        csv_text = args.input.read_text(encoding="utf-8")
+    else:
+        csv_text = await ConsumerSimBackend().site_data_csv()
     normalized = normalize_csv(csv_text)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(normalized, encoding="utf-8", newline="")
