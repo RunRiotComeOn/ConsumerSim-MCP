@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "scripts/refresh_site_data.py"
       - ".github/workflows/refresh-site.yml"
 
 permissions:
